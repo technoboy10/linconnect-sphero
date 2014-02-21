@@ -73,6 +73,7 @@ def cycle(s, r, g, b, loops=100, j=2):
     for i in range(j):
         fade_to(s, r, g, b, up=True, loop=loops)
         fade_to(s, r, g, b, up=False, loop=loops)
+    s.set_rgb(0, 0, 0)
 
 def user_specific_location(type, file):
     dir = os.path.expanduser(os.path.join('~/.' + type, app_name))
