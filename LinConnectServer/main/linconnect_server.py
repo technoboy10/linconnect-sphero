@@ -29,7 +29,10 @@ import sys
 import select
 import threading
 import platform
+import time
+from PIL import Image
 
+import sphero
 import cherrypy
 import subprocess
 from gi.repository import Notify
@@ -42,9 +45,34 @@ version = "3"
 # Global Variables
 _notification_header = ""
 _notification_description = ""
+s = sphero.Sphero(raw_input('What port is your sphero on? '))
 
 # Configuration
 script_dir = os.path.abspath(os.path.dirname(__file__))
+s.connect()
+
+def fade_to(s, r, g, b, up=False, loop=100):
+    if not up:
+        colors = [r, g, b]
+        for i in range(loop):
+            colors[0] -= r / loop
+            colors[1] -= g / loop
+            colors[2] -= b / loop
+            s.set_rgb(*colors)
+            time.sleep(0.03)
+    else:
+        colors = [0, 0, 0]
+        for i in range(loop):
+            colors[0] += r / loop
+            colors[1] += g / loop
+            colors[2] += b / loop
+            s.set_rgb(*colors)
+            time.sleep(0.03)
+
+def cycle(s, r, g, b, loops=100, j=2):
+    for i in range(j):
+        fade_to(s, r, g, b, up=True, loop=loops)
+        fade_to(s, r, g, b, up=False, loop=loops)
 
 def user_specific_location(type, file):
     dir = os.path.expanduser(os.path.join('~/.' + type, app_name))
@@ -84,6 +112,27 @@ del conf_file
 
 # Must append port because Java Bonjour library can't determine it
 _service_name = platform.node()
+
+from PIL import Image
+
+class PixelCounter(object):
+  ''' loop through each pixel and average rgb '''
+  def __init__(self, imageName):
+      self.pic = Image.open(imageName)
+      # load image data
+      self.imgData = self.pic.load()
+  def averagePixels(self):
+      r, g, b = 0, 0, 0
+      count = 0
+      for x in xrange(self.pic.size[0]):
+          for y in xrange(self.pic.size[1]):
+            clrs = self.imgData[x,y]
+            r += clrs[0]
+            g += clrs[1]
+            b += clrs[2]
+            count += 1
+      # calculate averages
+      return (r/count), (g/count), (b/count), count
 
 class Notification(object):
     if parser.getboolean('other', 'enable_instruction_webpage') == 1:
@@ -126,11 +175,15 @@ class Notification(object):
                 notif.set_timeout(parser.getint('other', 'notify_timeout'))
             try:
                 notif.show()
+                pc = PixelCounter(icon_path)
+                cycle(s, *pc.averagePixels()[:3], loops=15, j=4)
             except:
                 # Workaround for org.freedesktop.DBus.Error.ServiceUnknown
                 Notify.uninit()
                 Notify.init("com.willhauck.linconnect")
                 notif.show()
+                pc = PixelCounter(icon_path)
+                cycle(s, *pc.averagePixels()[:3], loops=15, j=4)
 
         return "true"
     notif.exposed = True
